@@ -56,10 +56,10 @@ namespace Inpaint {
         {
             int topx = clamp(x, 0, m.cols - 1);
             int topy = clamp(y, 0, m.rows - 1);
-            width -= std::abs(topx - x);
+            width  -= std::abs(topx - x);
             height -= std::abs(topy - y);
 
-	        width = clamp(width, 0, m.cols - topx);
+	        width  = clamp(width, 0, m.cols - topx);
             height = clamp(height, 0, m.rows - topy);            
             x = topx;
             y = topy;

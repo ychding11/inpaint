@@ -25,7 +25,8 @@
 namespace Inpaint {
 
     template<bool HasTargetMaskSupport>
-    class PatchMatchDistanceFunctor {
+    class PatchMatchDistanceFunctor
+	{
     public:
         PatchMatchDistanceFunctor(int normType)
             :_normType(normType)
@@ -333,16 +334,21 @@ namespace Inpaint {
    
     void patchMatch(
         cv::InputArray &source_, 
-        cv::InputArray &target_, cv::InputArray &targetMask_, 
-        cv::InputOutputArray &corrs_, cv::InputOutputArray &distances_,
+        cv::InputArray &target_,
+		cv::InputArray &targetMask_, 
+        cv::InputOutputArray &corrs_,
+		cv::InputOutputArray &distances_,
         int halfPatchSize,
         int iterations,
         int normType)
     {
 
-        if (targetMask_.empty()) {
+        if (targetMask_.empty())
+		{
             patchMatch(source_, target_, targetMask_, corrs_, distances_, halfPatchSize, iterations, PatchMatchDistanceFunctor<false>(normType));
-        } else {
+        }
+		else
+		{
             patchMatch(source_, target_, targetMask_, corrs_, distances_, halfPatchSize, iterations, PatchMatchDistanceFunctor<true>(normType));
         }
     }

@@ -26,19 +26,16 @@
 namespace Inpaint {
 
     /** 
-        Implementation of the exemplar based inpainting algorithm described in
-        "Object Removal by Exemplar-Based Inpainting", A. Criminisi et. al. 
+        Implementation of the exemplar based inpainting algorithm described in "Object Removal by Exemplar-Based Inpainting", A. Criminisi et. al. 
             
         Changes made by the author with respect to the original paper:
             - the template match error is calculated based on larger patch sizes than those
               used to infill. The reason behind this is to compare a larger portion of source
               and target regions and thus to avoid visual artefacts.
       
-            - the search for the best matching spot of the patch position to be inpainted
-              is accelerated by TemplateMatchCandidates.
+            - the search for the best matching spot of the patch position to be inpainted is accelerated by TemplateMatchCandidates.
 
-        Please note edge cases (i.e regions on the image border) are crudely handled by simply 
-        discarding them.
+        Please note edge cases (i.e regions on the image border) are crudely handled by simply discarding them.
 
       */
     class CriminisiInpainter
@@ -115,8 +112,7 @@ namespace Inpaint {
     /** 
         Inpaint image.
 
-        Implementation of the exemplar based inpainting algorithm described in
-        "Object Removal by Exemplar-Based Inpainting", A. Criminisi et. al. 
+        Implementation of the exemplar based inpainting algorithm described in "Object Removal by Exemplar-Based Inpainting", A. Criminisi et. al. 
         
         \param image Image to be inpainted. 
         \param targetMask Region to be inpainted.

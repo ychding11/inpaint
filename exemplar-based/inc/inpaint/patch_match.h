@@ -43,14 +43,12 @@ namespace Inpaint {
     */
     void patchMatch(
         cv::InputArray &source, 
-        cv::InputArray &target, cv::InputArray &targetMask, 
-        cv::InputOutputArray &corrs, cv::InputOutputArray &distances,
+        cv::InputArray &target,
+		cv::InputArray &targetMask, 
+        cv::InputOutputArray &corrs,
+		cv::InputOutputArray &distances,
         int halfPatchSize,
         int iterations,
         int normType = cv::NORM_L2SQR);
-
-
-    
-
 }
 #endif

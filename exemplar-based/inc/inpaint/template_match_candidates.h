@@ -27,8 +27,7 @@ namespace Inpaint {
     /**
         Find candidate positions for template matching.
 
-        Implementation is based on 
-        "Speed-up Template Matching through Integral Image based Weak Classifiers", Tirui Wu et. al.
+        Implementation is based on "Speed-up Template Matching through Integral Image based Weak Classifiers", Tirui Wu et. al.
 
         This method subdivides the template into a set of blocks. For each block the mean (of each
         channel) is calculated and compared to the mean of the entire template. A binary decision is
