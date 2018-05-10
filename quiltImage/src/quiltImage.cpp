@@ -213,15 +213,82 @@ cv::Mat L2Synthesis(const cv::Mat & image, int k = 13, int o = 2)
 	return ret;
 }
 
+void sumChannels(const cv::Mat3f &a, cv::Mat1f &b)
+ {
+	CV_Assert(a.type() == CV_32FC3);
+	int rows = a.rows;
+	int cols = b.cols;
+	b.create(a.size());
+
+	for (int i = 0; i < rows; ++i)
+	{
+		const float *sptr = a.ptr<float>(i);
+			  float *dptr = b.ptr<float>(i);
+		for (int j = 0; j < cols; ++j)
+		{
+			dptr[j] = sptr[0] + sptr[1] + sptr[2];
+			sptr += 3;
+		}
+	}
+}
+
 static void minCutVertical(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vector<int>& cut)
 {
 	cv::Mat3f diff = ov1 - ov2;
-	cv::Mat3f diff = diff.mul(diff);
+	diff = diff.mul(diff);
 	cv::Mat3f res;
 	cv::sqrt(diff, res);
+	cv::Mat1f a;
+	sumChannels(res, a);
 
+	struct elem { int i; float v; };
 	int h = ov1.rows;
 	int w = ov1.cols;
+	CV_Assert(h == cut.size());
+	//std::vector<std::vector<elem> > track(h, std::vector<elem>(w, { 0, 0.0 }));
+	std::vector<std::vector<int> > track(h, std::vector<int>(w, 0) );
+
+	for (int i = 0; i < w; ++i)
+	{
+		track[0][i] = i;
+	}
+	
+	for (int i = 1; i < h; i++)
+	{
+		const float *p = a.ptr<float>(i - 1);
+		      float *c = a.ptr<float>(i);
+		for (int j = 0; j < w; ++j)
+		{
+			if (j == 0)
+			{
+				p[j] < p[j + 1] ? track[i][j] = j, c[j] += p[j] : track[i][j] = j + 1, c[j] += p[j + 1];
+			}
+			else if (j == w - 1)
+			{
+				p[j] < p[j - 1] ? track[i][j] = j, c[j] += p[j] : track[i][j] = j - 1, c[j] += p[j - 1];
+			}
+			else
+			{
+				p[j] < p[j - 1] ? (p[j] < p[j + 1] ? track[i][j] = j, c[j] += p[j] : track[i][j] = j + 1, c[j] += p[j + 1]) : \
+					              (p[j - 1] < p[j + 1] ? track[i][j] = j - 1, c[j] += p[j - 1] : track[i][j] = j + 1, c[j] += p[j + 1]);
+			}
+		}
+	}
+
+    const float *p = a.ptr<float>(h - 1);
+	int index = 0;
+	float v = p[0];
+	for (int i = 1; i < w; ++i)
+	{
+		if (p[i] < v ) v = p[i], index = i;
+	}
+
+	cut[h - 1] = index;
+	for (int i = h - 1; i > 0; --i)
+	{
+		index = track[i][index];
+		cut[i - 1] = index;
+	}
 
 }
 
@@ -237,7 +304,7 @@ static void quiltOverlapVertical(cv::Mat & image, const cv::Mat & patch, int x, 
 
 	cv::Mat3f ov1 = image(cv::Rect(x, y, ow, k));
 	cv::Mat3f ov2 = patch(cv::Rect(0, 0, ow, k));
-	std::vector<int> cut;
+	std::vector<int> cut(k, 0);
 
 	minCutVertical(ov1, ov2, cut);
 	assert(cut.size() == k);
