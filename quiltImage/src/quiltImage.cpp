@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <ctime>
+#include <vector>
 #include <opencv2/opencv.hpp>
 
 static cv::Mat fetchPatch(const cv::Mat & image, int x, int y, int k)
@@ -173,7 +174,105 @@ static void putOverlapBoth(cv::Mat & image, const cv::Mat & patch, int x, int y,
 	patch(cv::Rect(o / 2, o / 2, k - o / 2, k - o / 2)).copyTo(roi);
 }
 
-cv::Mat L2Synthesis(const cv::Mat & image, int k, int o)
+cv::Mat L2Synthesis(const cv::Mat & image, int k = 13, int o = 2)
+{
+	int w = image.cols * 2;
+	int h = image.rows * 2;
+	double bestErr = 100000000000.0;
+	srand(time(NULL));
+
+	cv::Mat ret(h, w, CV_8UC3, cv::Scalar::all(0));
+	cv::Mat roi(ret, cv::Rect(0, 0, k, k));
+	image(cv::Rect(0, 0, k, k)).copyTo(roi);
+	cv::Mat vov = image(cv::Rect(k - o, 0, o, k));
+	cv::Mat hov = image(cv::Rect(0, k - o, k, o));
+
+	for (int j = k - o; j <= w - k; j += (k -o) )
+	{
+		cv::Mat patch = getBestVertical(image, vov, bestErr, k);
+	    vov = patch(cv::Rect(k - o, 0, o, k));
+		putOverlapVertical( ret, patch, j, 0, o);
+	}
+	for (int i = k - o; i <= h - k; i += (k - o) )
+	{
+		cv::Mat patch = getBestHorizonal(image, hov, bestErr, k);
+	    hov = patch(cv::Rect(0, k - o, k, o));
+		putOverlapHorizonal( ret, patch, 0, i, o);
+	}
+
+	for (int i = k - o; i <= h - k; i += (k - o) )
+	{
+		for (int j = k - o; j <= w - k; j += (k - o) )
+		{
+			hov = ret(cv::Rect(j, i, k, o));
+			vov = ret(cv::Rect(j, i, o, k));
+			cv::Mat patch = getBestBoth(image, vov, hov, bestErr, k);
+			putOverlapBoth( ret, patch, j, i, o);
+		}
+	}
+	return ret;
+}
+
+static void minCutVertical(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vector<int>& cut)
+{
+	cv::Mat3f diff = ov1 - ov2;
+	cv::Mat3f diff = diff.mul(diff);
+	cv::Mat3f res;
+	cv::sqrt(diff, res);
+
+	int h = ov1.rows;
+	int w = ov1.cols;
+
+}
+
+static void minCutHorizonal(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vector<int>& cut)
+{
+
+}
+
+static void quiltOverlapVertical(cv::Mat & image, const cv::Mat & patch, int x, int y, int ow)
+{
+	assert(patch.rows == patch.cols);
+	int k = patch.rows;
+
+	cv::Mat3f ov1 = image(cv::Rect(x, y, ow, k));
+	cv::Mat3f ov2 = patch(cv::Rect(0, 0, ow, k));
+	std::vector<int> cut;
+
+	minCutVertical(ov1, ov2, cut);
+	assert(cut.size() == k);
+	for (int i = 0; i < k; i++)
+	{
+		int b = cut[i];
+		for (int j = b; j < ow; ++j)
+		{
+			ov1.at<cv::Vec3f>(i, j) = ov2.at<cv::Vec3f>(i, j);
+		}
+	}
+}
+
+static void quiltOverlapHorizonal(cv::Mat & image, const cv::Mat & patch, int x, int y, int oh)
+{
+	assert(patch.rows == patch.cols);
+	int k = patch.rows;
+
+	cv::Mat3f ov1 = image(cv::Rect(x, y, k, oh));
+	cv::Mat3f ov2 = patch(cv::Rect(0, 0, k, oh));
+	std::vector<int> cut;
+
+	minCutHorizonal(ov1, ov2, cut);
+	assert(cut.size() == k);
+	for (int i = 0; i < k; i++)
+	{
+		int b = cut[i];
+		for (int j = b; j < oh; ++j)
+		{
+			ov1.at<cv::Vec3f>(j, i) = ov2.at<cv::Vec3f>(j, i);
+		}
+	}
+}
+
+cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 {
 	int w = image.cols * 2;
 	int h = image.rows * 2;

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <ctime>
+#include <vector>
 #include <opencv2/opencv.hpp>
 
 static cv::Mat fetchPatch(const cv::Mat & image, int x, int y, int k)
@@ -51,6 +52,38 @@ cv::Mat naiveSynthesis(const cv::Mat & image, int k)
 	return ret;
 }
 
+void displayColorSpace(const cv::Mat3b & image)
+{
+	int w = image.cols;
+	int h = image.rows;
+	cv::Mat3b plane1(h, w * 2);
+
+	printf("- image data type: %d\n", image.type());
+	cv::Mat3b YcbcrImage; image.copyTo(YcbcrImage);
+
+	cv::cvtColor(YcbcrImage, YcbcrImage, CV_BGR2YCrCb);
+	printf("- res data type: %d\n", YcbcrImage.type());
+
+    //cv::imshow("src colorspace", image);
+    //cv::imshow("dst colorspace", YcbcrImage);
+	
+	image.copyTo( plane1(cv::Rect(0,0, w, h)) );
+	YcbcrImage.copyTo( plane1(cv::Rect(w,0, w, h)) );
+
+	std::vector<cv::Mat1b> chns;
+	cv::split(YcbcrImage, chns);
+	cv::Mat1b plane2(h, w * 3);
+	for (int i = 0; i < chns.size(); ++i)
+	{
+		printf("- chns[%d]= %dx%d, type=%d\n", i, chns[i].cols, chns[i].rows, chns[i].type());
+		chns[i].copyTo( plane2(cv::Rect(w * i,0, w, h)) );
+	}
+
+    cv::imshow("multi-channels", plane1);
+    cv::imshow("single-channels", plane2);
+	cv::waitKey(); // wait for key stroke forever.
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 2)
@@ -60,46 +93,47 @@ int main(int argc, char **argv)
 	}
 
     // How to check read image ok?
-	cv::Mat inputImage = cv::imread(argv[1]);
+	cv::Mat3b inputImage = cv::imread(argv[1]);
     printf("- Image size w=%d, h=%d.\n", inputImage.cols, inputImage.rows);
 	int h = inputImage.rows;
 	int w = inputImage.cols;
 
-	int kw = 31;
-	int kh = 11;
+	displayColorSpace(inputImage); exit(1);
+	int kw = 3;
+	int kh = 3;
 
-    cv::Mat patch1 (inputImage, cv::Rect(0, 0, kw, kh));
-	cv::Mat patch2 (inputImage, cv::Rect(w - kw, h - kh, kw, kh));
+    cv::Mat3b patch1 (inputImage, cv::Rect(0, 0, kw, kh));
+	cv::Mat3b patch2 (inputImage, cv::Rect(w - kw, h - kh, kw, kh));
 	
     printf("- patch1 size w=%d, h=%d.\n", patch1.cols, patch1.rows);
     printf("- patch2 size w=%d, h=%d.\n", patch2.cols, patch2.rows);
 
-	cv::Mat dstM(cv::Size(inputImage.cols * 2, inputImage.rows), inputImage.type(), cv::Scalar::all(0));
-    cv::Mat roiM (dstM, cv::Rect(0, 0, w, h));
-
-	//std::cout << "\n inputImage = \n \t" <<  inputImage;
-    //std::cout << "\n patch1 =\n\t " << patch1 ;
-    //std::cout << "\n patch2 =\n\t " << patch2 ;
-
-	cv::namedWindow("Input Image");
-    cv::imshow("Input Image", inputImage);
-	//cv::imshow("Patch1", patch1);
-	//cv::imshow("Patch2", patch2);
-    //cv::imshow("Synthesis Image", naiveSynthesis(inputImage, 7));
-	cv::waitKey(); // wait for key stroke forever.
+	cv::Mat3b dstM(cv::Size(inputImage.cols * 2, inputImage.rows), inputImage.type());
+    cv::Mat3b roiM (dstM, cv::Rect(0, 0, w, h));
+	inputImage.copyTo(roiM);
 
 	for (int i = 0; i < kh; ++i)
 	{
 		for (int j = 0; j < kw; ++j)
 		{
-			//patch1.at<cv::Scalar>(i, j) = cv::Scalar(255, 0, 0);
-			//patch2.at<cv::Scalar>(i, j) = cv::Scalar(0, 0, 255);
-			patch1.at<cv::Vec3b>(i, j) = cv::Vec3b(255, 0, 0);
-			patch2.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 255);
+			patch1.at<cv::Vec3b>(i, j) = cv::Vec3b(1, 0, 2);
+			patch2.at<cv::Vec3b>(i, j) = cv::Vec3b(2, 0, 1);
 		}
 	}
-    cv::imshow("Input Image", inputImage);
-	cv::waitKey(); // wait for key stroke forever.
 
+	cv::Mat3f t = patch1 - patch2;
+	cv::Mat3f res;
+	cv::sqrt(t.mul(t), res);
+
+    std::cout << "\n\n patch1 =\n " << patch1 ;
+    std::cout << "\n\n patch2 =\n " << patch2 ;
+
+    std::cout << "\n\n t =\n " << t ;
+    std::cout << "\n\n res =\n " << res ;
+    std::cout << "\n\n norm =\n " << cv::norm(patch1, patch2) ;
+
+	cv::namedWindow("Input Image");
+    cv::imshow("Input Image", dstM);
+	cv::waitKey(); // wait for key stroke forever.
 	return 0;
 }
