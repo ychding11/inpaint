@@ -245,7 +245,6 @@ static void minCutVertical(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vec
 	int h = ov1.rows;
 	int w = ov1.cols;
 	CV_Assert(h == cut.size());
-	//std::vector<std::vector<elem> > track(h, std::vector<elem>(w, { 0, 0.0 }));
 	std::vector<std::vector<int> > track(h, std::vector<int>(w, 0) );
 
 	for (int i = 0; i < w; ++i)
@@ -293,21 +292,18 @@ static void minCutVertical(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vec
 }
 
 static void minCutHorizonal(const cv::Mat3f& ov1, const cv::Mat3f & ov2, std::vector<int>& cut)
-{
-
-}
+{ }
 
 static void quiltOverlapVertical(cv::Mat & image, const cv::Mat & patch, int x, int y, int ow)
 {
-	assert(patch.rows == patch.cols);
+	CV_Assert(patch.rows == patch.cols);
 	int k = patch.rows;
 
 	cv::Mat3f ov1 = image(cv::Rect(x, y, ow, k));
 	cv::Mat3f ov2 = patch(cv::Rect(0, 0, ow, k));
 	std::vector<int> cut(k, 0);
-
 	minCutVertical(ov1, ov2, cut);
-	assert(cut.size() == k);
+
 	for (int i = 0; i < k; i++)
 	{
 		int b = cut[i];
@@ -320,15 +316,18 @@ static void quiltOverlapVertical(cv::Mat & image, const cv::Mat & patch, int x, 
 
 static void quiltOverlapHorizonal(cv::Mat & image, const cv::Mat & patch, int x, int y, int oh)
 {
-	assert(patch.rows == patch.cols);
+	CV_Assert(patch.rows == patch.cols);
 	int k = patch.rows;
+	std::vector<int> cut(k, 0);
 
-	cv::Mat3f ov1 = image(cv::Rect(x, y, k, oh));
-	cv::Mat3f ov2 = patch(cv::Rect(0, 0, k, oh));
-	std::vector<int> cut;
+	cv::Mat3f ov1;
+	cv::Mat3f ov2;
 
-	minCutHorizonal(ov1, ov2, cut);
-	assert(cut.size() == k);
+	cv::transpose(image(cv::Rect(x, y, k, oh)), ov1);
+	cv::transpose(patch(cv::Rect(0, 0, k, oh)), ov2);
+
+	minCutVertical(ov1, ov2, cut);
+
 	for (int i = 0; i < k; i++)
 	{
 		int b = cut[i];
@@ -339,6 +338,42 @@ static void quiltOverlapHorizonal(cv::Mat & image, const cv::Mat & patch, int x,
 	}
 }
 
+static void quiltOverlapBoth(cv::Mat & image, const cv::Mat & patch, int x, int y, int o)
+{
+	CV_Assert(patch.rows == patch.cols);
+	int k = patch.rows;
+	std::vector<int> cut(k, 0);
+
+	cv::Mat3f ov1;
+	cv::Mat3f ov2;
+
+	cv::transpose(image(cv::Rect(x, y, k, o)), ov1);
+	cv::transpose(patch(cv::Rect(0, 0, k, o)), ov2);
+	minCutVertical(ov1, ov2, cut);
+	for (int i = 0; i < k; i++)
+	{
+		int b = cut[i];
+		for (int j = b; j < o; ++j)
+		{
+			ov1.at<cv::Vec3f>(j, i) = ov2.at<cv::Vec3f>(j, i);
+		}
+	}
+
+
+	ov1 = image(cv::Rect(x, y + o, o, k - o));
+	ov2 = patch(cv::Rect(0, o, o, k - o));
+	std::vector<int> cut1(k - o, 0);
+	minCutVertical(ov1, ov2, cut1);
+
+	for (int i = 0; i < k - o; i++)
+	{
+		int b = cut1[i];
+		for (int j = b; j < o; ++j)
+		{
+			ov1.at<cv::Vec3f>(i, j) = ov2.at<cv::Vec3f>(i, j);
+		}
+	}
+}
 cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 {
 	int w = image.cols * 2;
@@ -356,13 +391,16 @@ cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 	{
 		cv::Mat patch = getBestVertical(image, vov, bestErr, k);
 	    vov = patch(cv::Rect(k - o, 0, o, k));
-		putOverlapVertical( ret, patch, j, 0, o);
+		quiltOverlapVertical( ret, patch, j, 0, o);
+		patch(cv::Rect(o, 0, k - o, k)).copyTo(ret(cv::Rect(j + o, 0, k - o, k)) );
+
 	}
 	for (int i = k - o; i <= h - k; i += (k - o) )
 	{
 		cv::Mat patch = getBestHorizonal(image, hov, bestErr, k);
 	    hov = patch(cv::Rect(0, k - o, k, o));
-		putOverlapHorizonal( ret, patch, 0, i, o);
+		quiltOverlapHorizonal( ret, patch, 0, i, o);
+		patch(cv::Rect(0, o, k, k - o)).copyTo(ret(cv::Rect(0, i + o,  k, k - o)) );
 	}
 
 	for (int i = k - o; i <= h - k; i += (k - o) )
@@ -372,7 +410,8 @@ cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 			hov = ret(cv::Rect(j, i, k, o));
 			vov = ret(cv::Rect(j, i, o, k));
 			cv::Mat patch = getBestBoth(image, vov, hov, bestErr, k);
-			putOverlapBoth( ret, patch, j, i, o);
+			quiltOverlapBoth( ret, patch, j, i, o);
+		    patch(cv::Rect(o, o, k - o, k - o)).copyTo(ret(cv::Rect(j + o, i + o, k - o, k - o)) );
 		}
 	}
 	return ret;
@@ -397,8 +436,8 @@ int main(int argc, char **argv)
 	roiM = dstM(cv::Rect(w, 0, w * 2, h * 2));
 
 	//naiveSynthesis(inputImage, 11).copyTo(roiM);
-	L2Synthesis(inputImage, 19, 3).copyTo(roiM);
-
+	//L2Synthesis(inputImage, 19, 3).copyTo(roiM);
+	minCutSynthesis(inputImage, 13, 2);
     cv::imshow("Synthesis Image", dstM); cv::waitKey(); // wait for key stroke forever.
 	return 0;
 }
