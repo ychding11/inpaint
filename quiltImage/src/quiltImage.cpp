@@ -419,7 +419,7 @@ static void quiltOverlapVertical2(cv::Mat & targetOvRegion, const cv::Mat & ovRe
 	}
 }
 
-static cv::Mat guessBestVertical(const cv::Mat & image, const cv::Mat & ovRegion, double  bestErr)
+static cv::Mat guessBestVertical(const cv::Mat & image, const cv::Mat & ovRegion )
 {
 	int x = 0;
 	int y = 0;
@@ -432,7 +432,21 @@ static cv::Mat guessBestVertical(const cv::Mat & image, const cv::Mat & ovRegion
 	struct coord { int x; int y; };
     std::vector<coord> candidates;
 
-	bestErr = 1000.0;
+	double bestErr = 100000.0;
+	for (int i = 0; i < w - k; ++i)
+	{
+		cv::Mat leftOvRegion = image(cv::Rect(i, 0, ovWidth, ovHeight));
+		double err = cv::norm(ovRegion, leftOvRegion);
+		if (err == 0.0)
+		{
+			//return image(cv::Rect(x, y, k, k));
+			continue;
+		}
+		if (err < bestErr)
+		{
+			if (err < bestErr) bestErr = err;
+		}
+	}
 
 	for (int i = 0; i <= h - k; ++i)
 	{
@@ -440,8 +454,12 @@ static cv::Mat guessBestVertical(const cv::Mat & image, const cv::Mat & ovRegion
 		{
 			cv::Mat leftOvRegion = image(cv::Rect(j, i, ovWidth, ovHeight));
 			double err = cv::norm(ovRegion, leftOvRegion);
-			//double err = L2Norm(ovRegion, leftOvRegion);
 			double threshold = 1.1 * bestErr;
+			if (err == 0.0)
+			{
+				//return image(cv::Rect(x, y, k, k));
+				continue;
+			}
 			if (err < threshold)
 			{
 				candidates.push_back({j, i});
@@ -449,14 +467,217 @@ static cv::Mat guessBestVertical(const cv::Mat & image, const cv::Mat & ovRegion
 			}
 		}
 	}
+
 	int n = candidates.size();
-    CV_Assert(n <= 0);
-	int index = randint(0, n - 1);
+    CV_Assert(n > 0);
+	int index = n == 1 ? 0 : randint(0, n - 1);
 	x = candidates[index].x;
 	y = candidates[index].y;
 
 	//printf("- Vertical best patch(%d, %d), %lf\n", x, y, bestErr);
 	return image(cv::Rect(x, y, k, k));
+}
+
+static cv::Mat guessBestHorizonal(const cv::Mat & image, const cv::Mat & ov)
+{
+	int x = 0;
+	int y = 0;
+
+	int w = image.cols;
+	int h = image.rows;
+	int oh = ov.rows;
+	int k  = ov.cols;
+
+	double bestErr = 100000.0;
+	struct coord { int x; int y; };
+    std::vector<coord> candidates;
+
+	for (int i = 0; i < h - k; ++i)
+	{
+		cv::Mat upOvRegion = image(cv::Rect(0, i, k, oh));
+		double err = cv::norm( ov, upOvRegion );
+		if (err == 0.0)
+		{
+			continue;
+			//return image(cv::Rect(x, y, k, k));
+		}
+		if ( err < bestErr )
+		{
+			bestErr = err;
+		}
+	}
+	for (int i = 0; i <= h - k; ++i)
+	{
+		for (int j = 0; j < w - k; ++j)
+		{
+			cv::Mat upOvRegion = image(cv::Rect(j, i, k, oh));
+			double err = cv::norm( ov, upOvRegion );
+			double threshold = 1.1 * bestErr;
+
+			if (err == 0.0)
+			{
+				continue;
+				//return image(cv::Rect(x, y, k, k));
+			}
+			if (err < threshold)
+			{
+				candidates.push_back({j, i});
+				if (err < bestErr) bestErr = err;
+			}
+		}
+	}
+
+	int n = candidates.size();
+    CV_Assert(n > 0);
+	int index = n == 1 ? 0 : randint(0, n - 1);
+	x = candidates[index].x;
+	y = candidates[index].y;
+
+	//printf("- Horizonal best patch(%d, %d), %lf\n", x, y, bestErr);
+	return image(cv::Rect(x, y, k, k));
+}
+
+static cv::Mat guessBestBoth(const cv::Mat & image, const cv::Mat & vov, const cv::Mat & hov)
+{
+	assert(hov.rows == vov.cols);
+	int x = 0;
+	int y = 0;
+
+	int w = image.cols;
+	int h = image.rows;
+	int o = hov.rows;
+	int k = hov.cols;
+
+	double bestErr = 100000.0;
+	struct coord { int x; int y; };
+	std::vector<coord> candidates;
+	int count = 0;
+
+	while (count < 5)
+	{
+		int i = randint(0, h-k);
+		int j = randint(0, w-k);
+		cv::Mat topHov  = image(cv::Rect(j, i, k, o));
+		cv::Mat leftVov = image(cv::Rect(j, i + o, o, k - o));
+		double err = cv::norm(hov, topHov) + cv::norm(vov, leftVov);
+		if (err == 0.0)
+		{
+			continue;
+			//return image(cv::Rect(x, y, k, k));
+		}
+		if (err < bestErr)
+		{
+			bestErr = err;
+		}
+		++count;
+	}
+
+	for (int i = 0; i <= h - k; ++i)
+	{
+		for (int j = 0; j < w - k; ++j)
+		{
+			cv::Mat topHov  = image(cv::Rect(j, i, k, o));
+			cv::Mat leftVov = image(cv::Rect(j, i + o, o, k - o));
+			double err = cv::norm(hov, topHov) + cv::norm(vov, leftVov);
+			double threshold = 1.1 * bestErr;
+			if (err == 0.0)
+			{
+				continue;
+				//return image(cv::Rect(x, y, k, k));
+			}
+			if (err < threshold)
+			{
+				candidates.push_back({j, i});
+				if (err < bestErr) bestErr = err;
+			}
+		}
+	}
+
+	int n = candidates.size();
+    CV_Assert(n > 0);
+	int index = n == 1 ? 0 : randint(0, n - 1);
+	x = candidates[index].x;
+	y = candidates[index].y;
+	//printf("- Both best patch(%d, %d), %lf\n", x, y, bestErr);
+	return image(cv::Rect(x, y, k, k));
+}
+
+static void quiltOverlapBoth2(cv::Mat & image, const cv::Mat & patch, int x, int y, int o)
+{
+	CV_Assert(patch.rows == patch.cols);
+	int k = patch.rows;
+	std::vector<int> cut(k, 0);
+
+	cv::Mat3b dst = image(cv::Rect(x, y, k, o));
+	cv::Mat3b src = patch(cv::Rect(0, 0, k, o));
+
+	cv::Mat3f t1 = dst;
+	cv::Mat3f t2 = src;
+
+	cv::Mat3f ov1;
+	cv::Mat3f ov2;
+
+	cv::transpose(t1, ov1);
+	cv::transpose(t2, ov2);
+
+	minCutVertical(ov1, ov2, cut);
+
+	for (int col = 0; col < k; ++col)
+	{
+		int b = cut[col];
+		for (int row = b; row < o; ++row)
+		{
+			dst.at<cv::Vec3b>(row, col) = src.at<cv::Vec3b>(row, col);
+		}
+	}
+
+	dst = image(cv::Rect(x, y + o, o, k - o));
+	src = patch(cv::Rect(0, o, o, k - o));
+
+	ov1 = dst;
+	ov2 = src;
+	
+	std::vector<int> cut1(k - o, 0);
+	minCutVertical(ov1, ov2, cut1);
+
+	for (int row = 0; row < k - o; ++row)
+	{
+		int b = cut1[row];
+		for (int col = b; col < o; ++col)
+		{
+			dst.at<cv::Vec3b>(row, col) = src.at<cv::Vec3b>(row, col);
+		}
+	}
+}
+
+static void quiltOverlapHorizonal2(cv::Mat & dstOvRegion, const cv::Mat & ovRegion )
+{
+	int k  = ovRegion.cols;
+	int oh = ovRegion.rows;
+	std::vector<int> cuts(k, 0);
+
+	cv::Mat3b dst = dstOvRegion;
+	cv::Mat3b src = ovRegion;
+
+	cv::Mat3f t1 = dst;
+	cv::Mat3f t2 = src;
+
+	cv::Mat3f ov1;
+	cv::Mat3f ov2;
+
+	cv::transpose(t1, ov1);
+	cv::transpose(t2, ov2);
+
+	minCutVertical(ov1, ov2, cuts);
+
+	for (int col = 0; col < k; ++col)
+	{
+		int b = cuts[col];
+		for (int row = b; row < oh; ++row)
+		{
+			dst.at<cv::Vec3b>(row, col) = src.at<cv::Vec3b>(row, col);
+		}
+	}
 }
 
 cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
@@ -466,7 +687,7 @@ cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 	int xbegin = k - o, xend = w - k;
 	int ybegin = k - o, yend = h - k;
 
-	double bestErr = 100000000000.0;
+	double bestErr = 10000000.0;
 	srand(time(NULL));
 
 	cv::Mat ret(h, w, CV_8UC3, cv::Scalar::all(0));
@@ -478,36 +699,37 @@ cv::Mat minCutSynthesis(const cv::Mat & image, int k = 13, int o = 2)
 
 	for (int x = xbegin, y = 0; x <= xend; x += (k -o) )
 	{
-		cv::Mat patch = guessBestVertical(image, vov, bestErr);
-	    vov = patch(cv::Rect(k - o, 0, o, k));
+		cv::Mat patch = guessBestVertical(image, vov );
+	              vov = patch(cv::Rect(k - o, 0, o, k));
 		cv::Mat nonOV  = patch(cv::Rect(o, 0, k - o, k));
 		cv::Mat leftOV = patch(cv::Rect(0, 0, o, k));
         cv::Mat targetOvRegion = ret(cv::Rect(x, y, o, k));
 		nonOV.copyTo( ret(cv::Rect(x + o, y, k - o, k)) );
 		quiltOverlapVertical2( targetOvRegion, leftOV );
-
-		//cv::Mat src = patch(cv::Rect(o, 0, k - o, k));
-		//cv::Mat dst = ret(cv::Rect(j + o, 0, k - o, k));
-		//src.copyTo(dst);
 	}
 
-	for (int y = ybegin; y <= yend; y += (k - o) )
+	for (int y = ybegin, x = 0; y <= yend; y += (k - o) )
 	{
-		cv::Mat patch = getBestHorizonal(image, hov, bestErr, k);
+		cv::Mat patch = guessBestHorizonal(image, hov);
 	    hov = patch(cv::Rect(0, k - o, k, o));
-		quiltOverlapHorizonal( ret, patch, 0, y, o);
-		patch(cv::Rect(0, o, k, k - o)).copyTo(ret(cv::Rect(0, y + o,  k, k - o)) );
+		cv::Mat upOv   = patch( cv::Rect(0, 0, k, o) );
+		cv::Mat nonOv  = patch( cv::Rect(0, o, k, k - o) );
+		nonOv.copyTo( ret(cv::Rect(x, y + o,  k, k - o)) );
+        cv::Mat targetOvRegion = ret(cv::Rect(x, y, k, o));
+		quiltOverlapHorizonal2(targetOvRegion, upOv);
 	}
 
 	for (int y = ybegin; y <= yend; y += (k - o) )
 	{
 		for (int x = xbegin; x <= xend; x += (k - o) )
 		{
+#if 1
 			hov = ret(cv::Rect(x, y, k, o));
-			vov = ret(cv::Rect(x, y, o, k));
-			cv::Mat patch = getBestBoth(image, vov, hov, bestErr, k);
-			quiltOverlapBoth( ret, patch, x, y, o);
+			vov = ret(cv::Rect(x, y + o, o, k - o));
+			cv::Mat patch = guessBestBoth(image, vov, hov );
+			quiltOverlapBoth2( ret, patch, x, y, o);
 		    patch(cv::Rect(o, o, k - o, k - o)).copyTo(ret(cv::Rect(x + o, y + o, k - o, k - o)) );
+#endif
 		}
 	}
 	return ret;
@@ -520,20 +742,35 @@ int main(int argc, char **argv)
 		std::cout << "Usage:\n"  << argv[0] << " image_file_name" << std::endl;
 		return 1;
 	}
+	char title[64];
+	int nTest = 3;
 
     // How to check read image ok?
 	cv::Mat inputImage = cv::imread(argv[1]);
     printf("- Image size w=%d, h=%d.\n", inputImage.cols, inputImage.rows);
 	int h = inputImage.rows;
 	int w = inputImage.cols;
-	cv::Mat dstM(cv::Size(w * 3, h * 2), inputImage.type(), cv::Scalar::all(0));
+
+	cv::Mat dstM(cv::Size(w * (1 + 2 * nTest), h * 2), inputImage.type(), cv::Scalar::all(0));
 	cv::Mat roiM(dstM, cv::Rect(0, 0, w, h));
 	inputImage.copyTo(roiM);
-	roiM = dstM(cv::Rect(w, 0, w * 2, h * 2));
 
-	//naiveSynthesis(inputImage, 11).copyTo(roiM);
-	//L2Synthesis(inputImage, 19, 3).copyTo(roiM);
-	minCutSynthesis(inputImage, 24, 4).copyTo(roiM);
-    cv::imshow("Synthesis Image", dstM); cv::waitKey(); // wait for key stroke forever.
+	for (int i = 0; i < nTest; ++i)
+	{
+		roiM = dstM(cv::Rect(w * (1 + i * 2), 0, w * 2, h * 2));
+	    minCutSynthesis(inputImage, 12, 2).copyTo(roiM);
+	}
+    cv::imshow("minCutSynthesis", dstM);
+	cv::imwrite("minCutSynthesis.jpg", dstM);
+
+	for (int i = 0; i < nTest; ++i)
+	{
+		roiM = dstM(cv::Rect(w * (1 + i * 2), 0, w * 2, h * 2));
+	    L2Synthesis(inputImage, 19, 3).copyTo(roiM);
+	}
+    cv::imshow("overlapSynthesis", dstM);
+	cv::imwrite("overlapSynthesis.jpg", dstM);
+
+	cv::waitKey(); // wait for key stroke forever.
 	return 0;
 }
